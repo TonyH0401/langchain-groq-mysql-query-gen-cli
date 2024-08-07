@@ -1,67 +1,72 @@
-
+# --------------------------
+# Section: Library
+# --------------------------
 from langfuse.callback import CallbackHandler
 from langchain_core.output_parsers import StrOutputParser
 from langchain_core.prompts import PromptTemplate
-from mysql_gen_v01.mysql_db_schemas import schema
+from mysql_db_schemas import SCHEMAS
 from langchain_groq import ChatGroq
 import os
 from dotenv import load_dotenv
 load_dotenv()
 
-# Env variables
-GROQ_API = os.getenv("GROQ_API", "")
+# --------------------------
+# Section: Langfuse
+# --------------------------
 LANGFUSE_HOST = os.getenv("LANGFUSE_HOST", "")
-LANGFUSE_SEC = os.getenv("LANGFUSE_SEC", "")
-LANGFUSE_PUB = os.getenv("LANGFUSE_PUB", "")
-
-# Define Langfuse (LLM tracing)
+LANGFUSE_SECRET_KEY = os.getenv("LANGFUSE_SECRET_KEY", "")
+LANGFUSE_PUBLIC_KEY = os.getenv("LANGFUSE_PUBLIC_KEY", "")
 langfuse_handler = CallbackHandler(
-    secret_key=LANGFUSE_SEC,
-    public_key=LANGFUSE_PUB,
+    secret_key=LANGFUSE_SECRET_KEY,
+    public_key=LANGFUSE_PUBLIC_KEY,
     host=LANGFUSE_HOST,
 )
 
-# Define model
+# --------------------------
+# Section: GroqAI Model
+# --------------------------
+GROQ_API = os.getenv("GROQ_API", "")
 llm = ChatGroq(api_key=GROQ_API, model="llama3-70b-8192")
+# llm = ChatGroq(api_key=GROQ_API, model="gemma2-9b-it")
+
+# --------------------------
+# Section: Output Parser
+# --------------------------
+parser = StrOutputParser()
 
 # Define prompts
 generate_prompt = PromptTemplate.from_template("""
-    You are a database query specialist with extensive experience in creating precise and efficient SQL queries. 
-    Your expertise ensures that every query you generate adheres to the highest standards and rules set by the database schema.
-    Your goal is to generate SQL queries based on user input while adhering to strict guidelines.
-                                      
-    Schema: {schema}. 
-    userQuestion: {question}.
-    Generate an SQL query based on the userQuestion and pastResult while strictly adhering to the following rules:
-    DO:
-    - Use the exact name of tables and properties, they MUST be exactly the same in the query as in the schema.
-    - ALWAYS look at the tables and tables' properties in the database schema to see what you can query.
-    - Use only the column names you can see existing in the tables. 
-    - Pay attention to which column is in which table.
-    - Naming table must be unique.
-    - ALWAYS use 'LIMIT' function to limit the out to 20 rows.
+    You are a MySQL Expert (with extensive experience in creating syntactically correct and optimized MySQL queries).
+    Your goal is to generate syntactically correct MySQL queries based on the provided MySQL schemas and user specifications while adhering to strict guidelines.
+
+    The answer format: 
+        ```sql 
+            Answer 
+        ```. 
+
+    MySQL Schemas: {schemas}. 
+    User Specifications: {specifications}.
+
+    Generate a MySQL "SELECT" query based on the user specifications while strictly adhering to the following rules below. No yapping and do not make up information. DO NOT skip this step:
+    MUST DO LIST: 
+    - Display from minimum 3 to maximum 5 significant columns (unless the user specifies which specific columns to obtain).
+    - Use ONLY the columns existing in the tables. Pay attention to which columns is in which tables.
+    - Use ONLY the needed columns to answer the user specifications.
+    - ALWAYS use 'LIMIT' to limit the output to 5 rows.
     - Use function to get the current date, if the question involves "today".
-    - If there are tables need to be joined, you always use 'JOIN' function to join tables.
-    - Query only the columns that are needed to answer the user question.
-    - Unless the user specifies in the question specific columns to obtain, display for at most 5 significant columns. 
-    - The order of the results to return the most informative data in the database. The schema's primary key(s) must always be used in SELECT query.
-    - When 'GROUP BY', specifically check if enough essential columns
-    - Return SQL query ONLY.
+    - ALWAYS use 'JOIN' to join multiple tables.
+    - Order the results to return the most informative data in the database.
+    - ALWAYS check if there are enough columns when using "GROUP BY".
+    - Return ONLY MySQL query.
     Do NOT skip this step.
-    Do NOT:
-    - Query for columns or properties that do not exist.
-    - Make or generate any DML statements (INSERT, UPDATE, DELETE, DROP etc.) to the database.
-    - Use SQL subquery.
-    - Change the table's name.
-    - Use columns that not belong to table
-    - Use SELECT *.
-    - Use 'TOP 1'.
-    - Duplicate table names.
-    - Return any values beside the SQL query.
+    MUST NOT DO LIST:
+    - DO NOT use "SELECT *".
+    - DO NOT use subquery.
+    - DO NOT change the table names or the column names.
+    - DO NOT query for tables or columns that do not exist.
+    - DO NOT use "DISTINCT" as much as possible.
+    - DO NOT add or return any explanations about MySQL query.
     Do NOT skip this step.
-                                      
-    An optimal and syntactically correct SQL query to retrieve relevant information from the database schema based on the content of the user input.
-    Only the SQL query is returned. Nothing other than the SQL query is returned.
 """)
 extract_prompt = PromptTemplate.from_template("""
     You are an SQL queries extractor expert and specialist.
@@ -79,13 +84,10 @@ extract_prompt = PromptTemplate.from_template("""
     With SQL queries code block exaplaination.
 """)
 
-# Define output parser
-parser = StrOutputParser()
 
 # Define chains
-generate_chain = generate_prompt | llm | parser
-extract_chain = {
-    "generated_sql": generate_chain} | extract_prompt | llm | parser
+# extract_chain = {
+#     "generated_sql": generate_chain} | extract_prompt | llm | parser
 
 
 # Invoke the (final) chain
@@ -98,7 +100,11 @@ extract_chain = {
 if __name__ == "__main__":
     try:
         print(">>>>> Hello World Demo")
-        # Define user question, must be precise
+        # User questions/specifications (must be precise)
         question_1 = "List popular Electronics products"
+        # Generate MySQL chain
+        generate_chain = generate_prompt | llm | parser
+        response = generate_chain.invoke({"schemas": SCHEMAS, "specifications": question_1})
+        print(response)
     except Exception as e:
         print(f">>>>> Exception message: {e}")
