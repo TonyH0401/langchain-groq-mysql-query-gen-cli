@@ -70,4 +70,11 @@ python .\mysql_gen_v02\main.py
 
 Order from newest to oldest.
 
-### 08/08/2024
+### 07/08/2024
+
+- Create `mysql_gen_v02`.
+- Change prompts, add MySQL files.
+
+### 06/08/2024
+
+- Push old prompts, link can be found [here](https://github.com/TonyH0401/langchain-groq-mysql-query-gen-cli/tree/5cfaf064e1bd35802900da10ff3997c22b2af424).
